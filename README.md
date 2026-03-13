@@ -13,29 +13,16 @@ Sistema de agendamento completo com API REST e painel administrativo. Este MVP p
 
 ## 📋 Pré-requisitos
 
-- Node.js 18+ (recomendado 20+)
+- Node.js 18+
 - Conta no Supabase
-- npm ou yarn
-
-## 🚀 Deploy
-
-### Deploy no EasyPanel
-
-Para fazer deploy no EasyPanel, consulte o guia completo: [DEPLOY_EASYPANEL.md](./DEPLOY_EASYPANEL.md)
-
-**Resumo rápido:**
-1. Configure o repositório no EasyPanel
-2. Configure as variáveis de ambiente (Supabase, etc.)
-3. Configure build command: `npm run build`
-4. Configure start command: `npm start`
-5. Deploy!
+- Corepack habilitado (já incluído no Node.js moderno)
 
 ## 🔧 Configuração
 
 ### 1. Clone o repositório e instale as dependências
 
 ```bash
-npm install
+corepack pnpm install
 ```
 
 ### 2. Configure o Supabase
@@ -86,231 +73,30 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # API Key Settings (opcional)
 API_KEY_PREFIX=sk_
 API_KEY_RANDOM_LENGTH=32
-
-# CORS Settings (opcional)
-# Permite origens customizadas além do WeWeb
-# Pode ser uma única origem ou múltiplas separadas por vírgula
-# Exemplo: FRONTEND_ORIGIN=https://app.meudominio.com
-# Exemplo múltiplas: FRONTEND_ORIGIN=https://app1.com,https://app2.com
-FRONTEND_ORIGIN=
 ```
 
 ### 4. Execute a aplicação
 
 ```bash
-npm run dev
+corepack pnpm dev --port 3000
 ```
 
 A aplicação estará disponível em `http://localhost:3000`
 
-## 🌐 Configuração CORS
-
-A API está configurada para aceitar requisições do WeWeb e origens customizadas:
-
-### Origens Permitidas
-
-- `https://editor.weweb.io` (Editor do WeWeb)
-- Qualquer subdomínio `.weweb.app` (ex: `https://xxxxx.weweb.app`)
-- Origem customizada via variável de ambiente `FRONTEND_ORIGIN`
-
-### Headers Permitidos
-
-- `Content-Type`
-- `Authorization`
-
-### Métodos Permitidos
-
-- `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
-
-### Testando CORS
-
-**Preflight (OPTIONS):**
-```bash
-curl -X OPTIONS \
-  -H "Origin: https://editor.weweb.io" \
-  -H "Access-Control-Request-Method: GET" \
-  -H "Access-Control-Request-Headers: Authorization" \
-  -v \
-  https://seu-dominio.com/api/v1/professionals/ID/slots
-```
-
-**Requisição Real (GET):**
-```bash
-curl -X GET \
-  -H "Origin: https://editor.weweb.io" \
-  -H "Authorization: Bearer sua-api-key" \
-  -v \
-  https://seu-dominio.com/api/v1/professionals/ID/slots?from=2026-01-27T11:00:00Z&to=2026-02-09T11:15:00Z&serviceId=ID
-```
-
-Você deve ver os headers `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods` e `Access-Control-Allow-Headers` nas respostas.
-
-## 🔗 Usando a API com ngrok
-
-Quando expor a API via ngrok para uso com WeWeb ou outros clientes via browser, **é OBRIGATÓRIO** incluir o header `ngrok-skip-browser-warning` na **requisição** para evitar a página de warning do ngrok.
-
-### ⚠️ Problema Comum
-
-Sem o header na requisição, o ngrok intercepta ANTES da requisição chegar ao servidor e retorna HTML (página de warning) em vez de JSON, causando erros como `ERR_NGROK_6024` ou `ERR_NETWORK`.
-
-**⚠️ IMPORTANTE:** O header `ngrok-skip-browser-warning` deve ser enviado pelo **CLIENTE** na requisição. O servidor não pode resolver isso, pois o ngrok intercepta antes.
-
-### ✅ Solução
-
-**1. Healthcheck (sem autenticação):**
+### 5. Build e execução em produção (local)
 
 ```bash
-# ❌ SEM header ngrok (retorna HTML do ngrok)
-curl https://rodger-superstrong-anitra.ngrok-free.dev/api/v1/health
-
-# ✅ COM header ngrok (retorna JSON)
-curl -H "ngrok-skip-browser-warning: true" \
-  https://rodger-superstrong-anitra.ngrok-free.dev/api/v1/health
+corepack pnpm build
+corepack pnpm start
 ```
 
-**2. Endpoint de API (com autenticação):**
+Se você quiser gerar artefato `standalone` (ex.: Docker/EasyPanel), habilite explicitamente:
 
 ```bash
-curl -X GET \
-  -H "ngrok-skip-browser-warning: true" \
-  -H "Authorization: Bearer sua-api-key" \
-  "https://rodger-superstrong-anitra.ngrok-free.dev/api/v1/professionals/44d41876-24bd-4963-bd97-9ace47e56272/slots?from=2026-01-27T11:00:00Z&to=2026-02-09T11:15:00Z&serviceId=18f2320a-b217-449b-a110-ab0232935331"
+NEXT_OUTPUT_STANDALONE=true corepack pnpm build
 ```
 
-### 📝 Configuração no WeWeb (OBRIGATÓRIO)
-
-No WeWeb, ao configurar a chamada HTTP, você **DEVE** adicionar o header na requisição:
-
-**Passo a passo:**
-
-1. Abra a configuração da chamada HTTP no WeWeb
-2. Vá em **Headers** ou **Cabeçalhos**
-3. Adicione um novo header:
-   - **Nome do Header:** `ngrok-skip-browser-warning`
-   - **Valor:** `true`
-4. Salve a configuração
-
-**Exemplo completo de configuração no WeWeb:**
-
-1. **URL:** `https://rodger-superstrong-anitra.ngrok-free.dev/api/v1/professionals/{id}/slots`
-2. **Method:** `GET`
-3. **Headers (OBRIGATÓRIOS):**
-   - `Authorization`: `Bearer sua-api-key`
-   - `ngrok-skip-browser-warning`: `true` ⚠️ **NÃO ESQUEÇA DESTE!**
-4. **Query Parameters:**
-   - `from`: `2026-01-27T11:00:00Z`
-   - `to`: `2026-02-09T11:15:00Z`
-   - `serviceId`: `18f2320a-b217-449b-a110-ab0232935331`
-
-### 🔍 Como Verificar se Está Funcionando
-
-Se você receber HTML em vez de JSON, significa que o header não está sendo enviado. Verifique:
-
-1. ✅ O header `ngrok-skip-browser-warning: true` está configurado no WeWeb?
-2. ✅ O header está sendo enviado na requisição? (verifique no DevTools do navegador)
-3. ✅ A URL está correta e apontando para o ngrok?
-
-### 🛠️ SOLUÇÃO DEFINITIVA: Configurar ngrok para adicionar header automaticamente
-
-**⚠️ IMPORTANTE:** Se você tem controle sobre o comando do ngrok, esta é a melhor solução! Configure o ngrok para adicionar o header automaticamente em TODAS as requisições.
-
-**Opção 1: Via linha de comando (RECOMENDADO):**
-
-Pare o ngrok atual (Ctrl+C) e reinicie com:
-
-```bash
-ngrok http 3000 --request-header-add "ngrok-skip-browser-warning: true"
-```
-
-**Opção 2: Via arquivo de configuração (`~/.ngrok2/ngrok.yml` ou `%USERPROFILE%\.ngrok2\ngrok.yml` no Windows):**
-
-Crie ou edite o arquivo de configuração do ngrok:
-
-```yaml
-version: "2"
-authtoken: seu-token-aqui
-tunnels:
-  api:
-    addr: 3000
-    proto: http
-    request_header:
-      add:
-        - "ngrok-skip-browser-warning: true"
-```
-
-Depois execute:
-```bash
-ngrok start api
-```
-
-**✅ Com essa configuração:**
-- O ngrok adiciona o header automaticamente em TODAS as requisições
-- Você NÃO precisa configurar o header no WeWeb
-- Funciona para qualquer cliente (browser, Postman, etc.)
-
-**🔄 Após configurar, reinicie o ngrok:**
-1. Pare o ngrok atual (Ctrl+C no terminal onde está rodando)
-2. Execute o comando acima
-3. Teste novamente no WeWeb
-
-### 📋 Checklist de Troubleshooting
-
-Se ainda não funcionar, verifique:
-
-1. ✅ O ngrok foi reiniciado com a flag `--request-header-add`?
-2. ✅ O header está sendo adicionado? (verifique no ngrok dashboard: http://127.0.0.1:4040)
-3. ✅ A URL do ngrok está correta no WeWeb?
-4. ✅ O header `Authorization: Bearer sua-api-key` está configurado no WeWeb?
-5. ✅ A origin do WeWeb está permitida? (deve ser `https://editor.weweb.io`)
-
-### 🧪 Teste Rápido
-
-Teste se o ngrok está adicionando o header corretamente:
-
-```bash
-# Deve retornar JSON (não HTML)
-curl https://rodger-superstrong-anitra.ngrok-free.dev/api/v1/health
-```
-
-Se retornar JSON sem precisar do header no curl, significa que o ngrok está configurado corretamente!
-
-### 🏥 Healthcheck
-
-A API possui um endpoint de healthcheck que não requer autenticação:
-
-```bash
-GET /api/v1/health
-```
-
-**Resposta:**
-```json
-{
-  "ok": true,
-  "name": "api-agendamento-v2",
-  "time": "2026-01-17T23:00:00.000Z"
-}
-```
-
-Use este endpoint para verificar se a API está online antes de fazer requisições autenticadas.
-
-### ⚠️ Nota sobre Erros
-
-Todos os endpoints da API retornam erros em formato JSON, seguindo o padrão:
-
-```json
-{
-  "success": false,
-  "error": "Mensagem de erro descritiva"
-}
-```
-
-**Códigos de status comuns:**
-- `200` - Sucesso
-- `400` - Erro de validação
-- `401` - Não autenticado (API key inválida ou ausente)
-- `404` - Recurso não encontrado
-- `422` - Erro de validação de negócio
-- `500` - Erro interno do servidor
+No Windows, o modo `standalone` pode falhar sem permissão de symlink. Por isso ele está opt-in por variável de ambiente.
 
 ## 📚 Documentação da API
 
@@ -413,42 +199,6 @@ Endpoints que requerem autenticação JWT do Supabase:
 - **Companies**: Gerenciar empresas (Super Admin)
 - **Users**: Gerenciar usuários (Super Admin)
 - **API Keys**: Gerar e gerenciar API Keys (Admin)
-
-**Como obter o JWT do Supabase:**
-
-O JWT é obtido automaticamente através dos cookies quando você faz login. Para obter o token manualmente:
-
-**No Servidor (API Routes / Server Components):**
-```typescript
-import {createClient} from "@/lib/supabase/server"
-
-const supabase = await createClient()
-const {data: {session}} = await supabase.auth.getSession()
-
-// O JWT está em session.access_token
-const jwtToken = session?.access_token
-```
-
-**No Cliente (Client Components):**
-```typescript
-import {createClient} from "@/lib/supabase/client"
-
-const supabase = createClient()
-const {data: {session}} = await supabase.auth.getSession()
-
-// O JWT está em session.access_token
-const jwtToken = session?.access_token
-```
-
-**Usando a função helper:**
-```typescript
-import {getCurrentUser} from "@/lib/auth/helpers"
-
-// Esta função já usa o JWT internamente
-const user = await getCurrentUser()
-```
-
-📚 **Documentação completa:** Veja [docs/SUPABASE_JWT.md](./docs/SUPABASE_JWT.md) para mais detalhes.
 
 #### 📅 Agendamentos (API Key)
 
@@ -1022,6 +772,35 @@ Principais tabelas:
 - `activity_logs`: Logs de atividades
 
 ## 🚨 Troubleshooting
+
+### `pnpm` não reconhecido no PowerShell
+
+Use `corepack pnpm ...` em vez de `pnpm ...`.
+
+Exemplo:
+
+```bash
+corepack pnpm install
+corepack pnpm dev --port 3000
+```
+
+### `npm install` com erro `ERESOLVE`
+
+Este projeto usa `pnpm`. Não misture `npm` e `pnpm` no mesmo workspace.
+
+Passos recomendados:
+
+```bash
+corepack pnpm install
+```
+
+### Erro de binário nativo do `argon2` no build
+
+Se o `pnpm` bloquear scripts de instalação nativos, aprove os builds pendentes:
+
+```bash
+corepack pnpm approve-builds --all
+```
 
 ### Erro 401 ao consumir API
 

@@ -103,6 +103,169 @@ export class UserService {
 
     return data
   }
+
+  async getUserById(id: string) {
+    const supabase = await createServiceClient()
+
+    const {data, error} = await supabase.from("users").select("*").eq("id", id).single()
+
+    if (error || !data) {
+      logger.error({
+        message: "Failed to get user",
+        error,
+        userId: id
+      })
+      throw new Error("User not found")
+    }
+
+    return data
+  }
+
+  /** Conta quantos usuários com role super_admin existem (não bloqueados). */
+  async countSuperAdmins(excludeUserId?: string): Promise<number> {
+    const supabase = await createServiceClient()
+    let query = supabase
+      .from("users")
+      .select("id", {count: "exact", head: true})
+      .eq("role", "super_admin")
+    if (excludeUserId) {
+      query = query.neq("id", excludeUserId)
+    }
+    const {count, error} = await query
+    if (error) {
+      logger.error({message: "Failed to count super admins", error})
+      return 0
+    }
+    return count ?? 0
+  }
+
+  async deleteUser(id: string, deletedBy?: string) {
+    const supabase = await createServiceClient()
+
+    const user = await this.getUserById(id)
+    const authUserId = user.auth_user_id
+    const role = (user as {role?: string}).role
+
+    if (role === "super_admin") {
+      const otherSuperAdmins = await this.countSuperAdmins(id)
+      if (otherSuperAdmins < 1) {
+        throw new Error(
+          "Não é possível excluir o último super admin. Crie outro super admin antes de excluir este."
+        )
+      }
+    }
+
+    const {error: deleteError} = await supabase.from("users").delete().eq("id", id)
+
+    if (deleteError) {
+      logger.error({
+        message: "Failed to delete user record",
+        error: deleteError,
+        userId: id
+      })
+      throw new Error("Falha ao excluir usuário")
+    }
+
+    const {error: authError} = await supabase.auth.admin.deleteUser(authUserId)
+
+    if (authError) {
+      logger.warn({
+        message: "User record deleted but failed to delete auth user",
+        error: authError,
+        authUserId
+      })
+    }
+
+    await activityLogService.log({
+      userId: deletedBy ?? null,
+      action: "user_deleted",
+      resourceType: "user",
+      resourceId: id,
+      metadata: {email: user.email}
+    })
+
+    logger.info({
+      message: "User deleted successfully",
+      userId: id,
+      email: user.email
+    })
+
+    return {deleted: true}
+  }
+
+  async blockUser(id: string, blockedBy?: string) {
+    const supabase = await createServiceClient()
+
+    const user = await this.getUserById(id)
+
+    if ((user as {is_blocked?: boolean}).is_blocked) {
+      throw new Error("Usuário já está bloqueado")
+    }
+
+    const {error} = await supabase.from("users").update({is_blocked: true}).eq("id", id)
+
+    if (error) {
+      logger.error({
+        message: "Failed to block user",
+        error,
+        userId: id
+      })
+      throw new Error("Falha ao bloquear usuário")
+    }
+
+    await activityLogService.log({
+      userId: blockedBy ?? null,
+      action: "user_blocked",
+      resourceType: "user",
+      resourceId: id,
+      metadata: {email: user.email}
+    })
+
+    logger.info({
+      message: "User blocked successfully",
+      userId: id,
+      email: user.email
+    })
+
+    return {blocked: true}
+  }
+
+  async unblockUser(id: string, unblockedBy?: string) {
+    const supabase = await createServiceClient()
+
+    const user = await this.getUserById(id)
+
+    if (!(user as {is_blocked?: boolean}).is_blocked) {
+      throw new Error("Usuário não está bloqueado")
+    }
+
+    const {error} = await supabase.from("users").update({is_blocked: false}).eq("id", id)
+
+    if (error) {
+      logger.error({
+        message: "Failed to unblock user",
+        error,
+        userId: id
+      })
+      throw new Error("Falha ao desbloquear usuário")
+    }
+
+    await activityLogService.log({
+      userId: unblockedBy ?? null,
+      action: "user_unblocked",
+      resourceType: "user",
+      resourceId: id,
+      metadata: {email: user.email}
+    })
+
+    logger.info({
+      message: "User unblocked successfully",
+      userId: id,
+      email: user.email
+    })
+
+    return {unblocked: true}
+  }
 }
 
 export const userService = new UserService()

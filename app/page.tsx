@@ -66,10 +66,10 @@ export default async function HomePage() {
     redirect("/super-admin/companies")
   } else if (userData.role === "admin") {
     logger.info({
-      message: "HomePage: Redirecionando admin para /admin/api-keys",
+      message: "HomePage: Redirecionando admin para painel da barbearia",
       userId: userData.id
     })
-    redirect("/admin/api-keys")
+    redirect("/admin/servicos")
   }
 
   logger.warn({

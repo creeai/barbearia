@@ -17,7 +17,7 @@ export default async function UsersPage() {
           <h2 className="text-3xl font-bold">Users</h2>
         </div>
 
-        <UsersPageClient />
+        <UsersPageClient currentUserId={user?.id} />
       </div>
     </DashboardLayout>
   )

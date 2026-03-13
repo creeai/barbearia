@@ -1,0 +1,26 @@
+import {redirect} from "next/navigation"
+import {getCurrentUser} from "@/lib/auth/helpers"
+import {DashboardLayout} from "@/components/layout/DashboardLayout"
+import {ServicesPageClient} from "@/components/admin/ServicesPageClient"
+
+export default async function ServicosPage() {
+  const user = await getCurrentUser()
+
+  if (!user || user.role !== "admin") {
+    redirect("/login")
+  }
+
+  return (
+    <DashboardLayout userRole={user.role} userName={user.name}>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-bold">Serviços</h2>
+        </div>
+        <p className="text-muted-foreground">
+          Cadastre os serviços oferecidos pela sua barbearia (corte, barba, etc.).
+        </p>
+        <ServicesPageClient />
+      </div>
+    </DashboardLayout>
+  )
+}

@@ -1,6 +1,7 @@
 "use client"
 
 import {useState, useEffect} from "react"
+import {useApiFetch} from "@/components/providers/ApiAuthProvider"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import {Button} from "@/components/ui/button"
 import {Input} from "@/components/ui/input"
@@ -18,6 +19,7 @@ interface CreateUserFormProps {
 }
 
 export function CreateUserForm({onUserCreated}: CreateUserFormProps) {
+  const fetchWithAuth = useApiFetch()
   const [companies, setCompanies] = useState<Company[]>([])
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
@@ -34,7 +36,7 @@ export function CreateUserForm({onUserCreated}: CreateUserFormProps) {
 
   const fetchCompanies = async () => {
     try {
-      const response = await fetch("/api/v1/companies")
+      const response = await fetchWithAuth("/api/v1/companies")
       const data = await response.json()
 
       if (response.ok) {
@@ -53,7 +55,7 @@ export function CreateUserForm({onUserCreated}: CreateUserFormProps) {
     setLoading(true)
 
     try {
-      const response = await fetch("/api/v1/users", {
+      const response = await fetchWithAuth("/api/v1/users", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({

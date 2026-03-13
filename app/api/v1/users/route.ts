@@ -123,7 +123,8 @@ export async function GET(request: NextRequest) {
         name: u.name,
         role: u.role,
         companyId: u.company_id,
-        createdAt: u.created_at
+        createdAt: u.created_at,
+        isBlocked: (u as {is_blocked?: boolean}).is_blocked ?? false
       }))
     }
 

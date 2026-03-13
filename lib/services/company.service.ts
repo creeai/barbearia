@@ -83,6 +83,36 @@ export class CompanyService {
 
     return data
   }
+
+  async deleteCompany(id: string, userId?: string) {
+    const supabase = await createServiceClient()
+
+    const {error} = await supabase.from("companies").delete().eq("id", id)
+
+    if (error) {
+      logger.error({
+        message: "Failed to delete company",
+        error,
+        companyId: id
+      })
+      throw new Error(error.code === "23503" ? "Não é possível excluir: existem registros vinculados (usuários, API keys, etc.)" : "Falha ao excluir empresa")
+    }
+
+    await activityLogService.log({
+      userId: userId ?? null,
+      action: "company_deleted",
+      resourceType: "company",
+      resourceId: id,
+      metadata: {}
+    })
+
+    logger.info({
+      message: "Company deleted successfully",
+      companyId: id
+    })
+
+    return {deleted: true}
+  }
 }
 
 export const companyService = new CompanyService()

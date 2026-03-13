@@ -106,15 +106,15 @@ export async function authenticateUser(request: NextRequest): Promise<AuthUser |
     }
   }
   
-  // Fallback: tentar autenticação via cookies (para compatibilidade com browser)
+  // Fallback: autenticação via cookies (quando o client não envia Bearer)
   try {
     const supabase = await createClient()
     const {data: {user: authUser}, error: authError} = await supabase.auth.getUser()
-    
+
     if (authError || !authUser) {
       return null
     }
-    
+
     const {data: userData, error: userError} = await supabase
       .from("users")
       .select("id, role, company_id, name, email")

@@ -1,5 +1,5 @@
 import {NextRequest, NextResponse} from "next/server"
-import {requireAdminApi, ApiAuthError} from "@/lib/auth/api-helpers"
+import {requireSuperAdminApi, ApiAuthError} from "@/lib/auth/api-helpers"
 import {apiKeyService} from "@/lib/services/api-key.service"
 import {createServiceClient} from "@/lib/supabase/server"
 import {logger} from "@/lib/logger"
@@ -14,50 +14,35 @@ export async function PATCH(request: NextRequest, {params}: {params: {id: string
       path: `/api/v1/api-keys/${params.id}/revoke`
     })
 
-    const user = await requireAdminApi(request)
+    const user = await requireSuperAdminApi(request)
 
-    // Super admin pode revogar qualquer API key, admin apenas da sua company
-    if (user.role === "super_admin") {
-      // Super admin: buscar companyId da API key
-      const supabase = await createServiceClient()
-      const {data: apiKey, error: keyError} = await supabase
-        .from("api_keys")
-        .select(
-          `
-          id,
-          api_clients!inner (
-            company_id
-          )
+    const supabase = await createServiceClient()
+    const {data: apiKey, error: keyError} = await supabase
+      .from("api_keys")
+      .select(
         `
+        id,
+        api_clients!inner (
+          company_id
         )
-        .eq("id", params.id)
-        .single()
+      `
+      )
+      .eq("id", params.id)
+      .single()
 
-      if (keyError || !apiKey) {
-        const response: ApiResponse = {
-          success: false,
-          error: "API key not found"
-        }
-        return NextResponse.json(response, {status: 404})
+    if (keyError || !apiKey) {
+      const response: ApiResponse = {
+        success: false,
+        error: "API key not found"
       }
-
-      const apiClient = Array.isArray(apiKey.api_clients) 
-        ? apiKey.api_clients[0] 
-        : apiKey.api_clients
-
-      await apiKeyService.revokeApiKey(params.id, apiClient.company_id, user.id)
-    } else {
-      // Admin: apenas da sua company
-      if (!user.companyId) {
-        const response: ApiResponse = {
-          success: false,
-          error: "User must be associated with a company"
-        }
-        return NextResponse.json(response, {status: 400})
-      }
-
-      await apiKeyService.revokeApiKey(params.id, user.companyId, user.id)
+      return NextResponse.json(response, {status: 404})
     }
+
+    const apiClient = Array.isArray(apiKey.api_clients)
+      ? apiKey.api_clients[0]
+      : apiKey.api_clients
+
+    await apiKeyService.revokeApiKey(params.id, apiClient.company_id, user.id)
 
     const response: ApiResponse = {
       success: true,
@@ -70,8 +55,7 @@ export async function PATCH(request: NextRequest, {params}: {params: {id: string
       statusCode: 200,
       duration: Date.now() - startTime,
       response: response,
-      userId: user.id,
-      companyId: user.companyId
+      userId: user.id
     })
 
     return NextResponse.json(response)

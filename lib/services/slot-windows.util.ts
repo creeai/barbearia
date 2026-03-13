@@ -156,9 +156,16 @@ export function buildServiceWindowsFromBaseSlots({ baseSlots, durationMinutes, s
     debugEntry.accepted = true
     debugInfo.push(debugEntry)
     
+    const startIso = windowStart.toUTC().toISO()
+    const endIso = windowEnd.toUTC().toISO()
+    if (!startIso || !endIso) {
+      debugEntry.rejected = "Failed to serialize window ISO"
+      continue
+    }
+
     windows.push({
-      start_time: windowStart.toUTC().toISO(),
-      end_time: windowEnd.toUTC().toISO(),
+      start_time: startIso,
+      end_time: endIso,
       slot_ids: group.map(s => s.id)
     })
   }

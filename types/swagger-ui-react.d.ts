@@ -1,16 +1,12 @@
 declare module "swagger-ui-react" {
-  import {Component} from "react"
+  import type {ComponentType} from "react"
 
-  export interface SwaggerUIProps {
-    spec?: any
+  interface SwaggerUIProps {
+    spec?: unknown
     url?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 
-  export default class SwaggerUI extends Component<SwaggerUIProps> {}
-}
-
-declare module "swagger-ui-react/swagger-ui.css" {
-  const content: string
-  export default content
+  const SwaggerUI: ComponentType<SwaggerUIProps>
+  export default SwaggerUI
 }

@@ -1,5 +1,5 @@
 import {NextRequest, NextResponse} from "next/server"
-import {requireAdminApi, ApiAuthError} from "@/lib/auth/api-helpers"
+import {requireSuperAdminApi, ApiAuthError} from "@/lib/auth/api-helpers"
 import {apiKeyService} from "@/lib/services/api-key.service"
 import {logger} from "@/lib/logger"
 import {z} from "zod"
@@ -7,7 +7,7 @@ import type {ApiResponse} from "@/types/api"
 
 const createApiKeySchema = z.object({
   label: z.string().min(1),
-  companyId: z.string().uuid().optional() // Super admin pode especificar companyId
+  companyId: z.string().uuid() // Obrigatório: super admin escolhe a empresa
 })
 
 export async function POST(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       path: "/api/v1/api-keys"
     })
 
-    const user = await requireAdminApi(request)
+    const user = await requireSuperAdminApi(request)
 
     const body = await request.json()
     logger.debug({
@@ -27,40 +27,13 @@ export async function POST(request: NextRequest) {
       method: "POST",
       path: "/api/v1/api-keys",
       payload: body,
-      userId: user.id,
-      userRole: user.role,
-      companyId: user.companyId
+      userId: user.id
     })
 
     const validated = createApiKeySchema.parse(body)
 
-    // Determinar companyId: super_admin pode especificar, admin usa a própria
-    let targetCompanyId: string
-    if (user.role === "super_admin") {
-      // Super admin pode criar para qualquer company ou precisa especificar
-      if (validated.companyId) {
-        targetCompanyId = validated.companyId
-      } else {
-        const response: ApiResponse = {
-          success: false,
-          error: "companyId is required when creating API key as super_admin"
-        }
-        return NextResponse.json(response, {status: 400})
-      }
-    } else {
-      // Admin usa sua própria company
-      if (!user.companyId) {
-        const response: ApiResponse = {
-          success: false,
-          error: "User must be associated with a company"
-        }
-        return NextResponse.json(response, {status: 400})
-      }
-      targetCompanyId = user.companyId
-    }
-
     const result = await apiKeyService.createApiKey({
-      companyId: targetCompanyId,
+      companyId: validated.companyId,
       label: validated.label,
       userId: user.id
     })
@@ -86,8 +59,7 @@ export async function POST(request: NextRequest) {
       duration: Date.now() - startTime,
       response: logResponse,
       userId: user.id,
-      companyId: targetCompanyId,
-      userRole: user.role
+      companyId: validated.companyId
     })
 
     return NextResponse.json(response, {status: 201})
@@ -131,22 +103,9 @@ export async function GET(request: NextRequest) {
       path: "/api/v1/api-keys"
     })
 
-    const user = await requireAdminApi(request)
+    const user = await requireSuperAdminApi(request)
 
-    // Super admin lista todas as API keys, admin lista apenas da sua company
-    let keys
-    if (user.role === "super_admin") {
-      keys = await apiKeyService.listAllApiKeys()
-    } else {
-      if (!user.companyId) {
-        const response: ApiResponse = {
-          success: false,
-          error: "User must be associated with a company"
-        }
-        return NextResponse.json(response, {status: 400})
-      }
-      keys = await apiKeyService.listApiKeys(user.companyId)
-    }
+    const keys = await apiKeyService.listAllApiKeys()
 
     const response: ApiResponse = {
       success: true,
@@ -159,9 +118,7 @@ export async function GET(request: NextRequest) {
       statusCode: 200,
       duration: Date.now() - startTime,
       response: response,
-      userId: user.id,
-      companyId: user.companyId,
-      userRole: user.role
+      userId: user.id
     })
 
     return NextResponse.json(response)

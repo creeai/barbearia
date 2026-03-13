@@ -81,7 +81,10 @@ export class BookingService {
   async getAllBookings(companyId: string, filters?: {professionalId?: string; status?: string}) {
     const supabase = await createServiceClient()
 
-    let query = supabase.from("bookings").select("*").eq("company_id", companyId)
+    let query = supabase
+      .from("bookings")
+      .select("*, slots!slot_id(start_time, end_time)")
+      .eq("company_id", companyId)
 
     if (filters?.professionalId) {
       query = query.eq("professional_id", filters.professionalId)
@@ -103,7 +106,17 @@ export class BookingService {
       throw new Error("Failed to get bookings")
     }
 
-    return data || []
+    const rows = data || []
+    return rows.map((row: Record<string, unknown>) => {
+      const slots = row.slots as {start_time?: string; end_time?: string} | null | undefined
+      const slot = Array.isArray(slots) ? slots[0] : slots
+      return {
+        ...row,
+        slot_start_time: slot?.start_time ?? null,
+        slot_end_time: slot?.end_time ?? null,
+        slots: undefined
+      }
+    })
   }
 
   async getBookingById(id: string, companyId: string) {

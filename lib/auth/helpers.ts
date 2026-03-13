@@ -76,6 +76,17 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
+/** Retorna o access_token da sessão Supabase para o client enviar nas chamadas à API. */
+export async function getSessionToken(): Promise<string | null> {
+  const supabase = await createClient()
+  const {
+    data: {session},
+    error
+  } = await supabase.auth.getSession()
+  if (error || !session?.access_token) return null
+  return session.access_token
+}
+
 export async function requireAuth(): Promise<AuthUser> {
   logger.debug({
     message: "requireAuth: Verificando autenticação"

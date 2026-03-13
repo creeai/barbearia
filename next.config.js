@@ -10,8 +10,9 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["swagger-ui-react"]
   },
-  // Configuração para output standalone (otimizado para Docker/EasyPanel)
-  output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined
+  // Em Windows sem permissão de symlink, standalone pode falhar no build local.
+  // Para deploy, habilite explicitamente com NEXT_OUTPUT_STANDALONE=true.
+  output: process.env.NEXT_OUTPUT_STANDALONE === "true" ? "standalone" : undefined
 }
 
 module.exports = nextConfig

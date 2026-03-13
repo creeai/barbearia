@@ -1,5 +1,6 @@
 import {redirect} from "next/navigation"
-import {getCurrentUser} from "@/lib/auth/helpers"
+import {getCurrentUser, getSessionToken} from "@/lib/auth/helpers"
+import {ApiAuthProvider} from "@/components/providers/ApiAuthProvider"
 import {logger} from "@/lib/logger"
 
 export default async function DashboardLayout({children}: {children: React.ReactNode}) {
@@ -16,11 +17,13 @@ export default async function DashboardLayout({children}: {children: React.React
     redirect("/login")
   }
 
+  const accessToken = await getSessionToken()
+
   logger.debug({
     message: "DashboardLayout: Usuário autenticado",
     userId: user.id,
     role: user.role
   })
 
-  return <>{children}</>
+  return <ApiAuthProvider accessToken={accessToken}>{children}</ApiAuthProvider>
 }

@@ -376,7 +376,7 @@ export class SlotService {
     const timezone = params.timezone || 'America/Sao_Paulo'
     
     // Se closingTime não foi fornecido, buscar das availabilities
-    let closingTime: string | undefined = params.closingTime
+    let closingTime = params.closingTime
     if (!closingTime) {
       const availabilities = await availabilityService.getAllAvailabilities(
         params.companyId,
@@ -391,19 +391,6 @@ export class SlotService {
       } else {
         closingTime = '18:00' // Default
       }
-    }
-
-    // Validar que closingTime foi definido (obrigatório para gerar slots)
-    if (!closingTime || typeof closingTime !== 'string') {
-      const error = new Error("Closing time is required to generate service slots. No availability found and no closing time provided.")
-      logger.error({
-        message: "Failed to generate service windows: closing time missing",
-        error: error.message,
-        professionalId: params.professionalId,
-        serviceId: params.serviceId,
-        companyId: params.companyId
-      })
-      throw error
     }
 
     logger.debug({
@@ -500,7 +487,7 @@ export class SlotService {
       to: params.to,
       companyId: params.companyId,
       timezone,
-      closingTime,
+      closingTime: closingTime ?? "18:00",
       occupiedStartTimes,
       minLeadMinutes: params.minLeadMinutes || 0
     })
@@ -700,12 +687,261 @@ export class SlotService {
     // add simple label in pt-BR short format
     const labeled = windowsWithRealIds.map(w => ({
       ...w,
-      label: DateTime.fromISO(w.start_time).setZone(timezone).toFormat("ccc dd/MM HH:mm") + '–' + DateTime.fromISO(w.end_time).setZone(timezone).toFormat('HH:mm')
+      label:
+        DateTime.fromISO(w.start_time)
+          .setZone(timezone)
+          .setLocale("pt-BR")
+          .toFormat("ccc dd/MM HH:mm") +
+        " – " +
+        DateTime.fromISO(w.end_time)
+          .setZone(timezone)
+          .setLocale("pt-BR")
+          .toFormat("HH:mm")
     }))
 
     return {
       service,
       slots: labeled
+    }
+  }
+
+  /**
+   * Cria um slot bloqueado (horário indisponível) para o painel da barbearia.
+   * Usado quando o admin bloqueia um horário específico.
+   */
+  async createBlockedSlot(params: {
+    companyId: string
+    professionalId: string
+    startTime: string // ISO
+    endTime: string // ISO
+  }): Promise<Slot> {
+    const supabase = await createServiceClient()
+
+    const {data: professional} = await supabase
+      .from("professionals")
+      .select("id")
+      .eq("id", params.professionalId)
+      .eq("company_id", params.companyId)
+      .single()
+
+    if (!professional) {
+      throw new Error("Professional not found or doesn't belong to company")
+    }
+
+    const {data, error} = await supabase
+      .from("slots")
+      .insert({
+        professional_id: params.professionalId,
+        service_id: null,
+        start_time: params.startTime,
+        end_time: params.endTime,
+        is_available: false
+      })
+      .select()
+      .single()
+
+    if (error || !data) {
+      logger.error({
+        message: "Failed to create blocked slot",
+        error,
+        professionalId: params.professionalId,
+        companyId: params.companyId
+      })
+      throw new Error("Failed to create blocked slot")
+    }
+
+    return data
+  }
+
+  /**
+   * Cria slots bloqueados para todos os 7 dias da semana (mesmo horário em cada dia).
+   * Usa a data de startTime para definir a semana (dia 0 a dia 6 a partir dessa data).
+   */
+  async createBlockedSlotsForWeek(params: {
+    companyId: string
+    professionalId: string
+    startTime: string
+    endTime: string
+  }): Promise<Slot[]> {
+    const timezone = "America/Sao_Paulo"
+    const startDt = DateTime.fromISO(params.startTime, {zone: "utc"}).setZone(timezone)
+    const endDt = DateTime.fromISO(params.endTime, {zone: "utc"}).setZone(timezone)
+    const startHour = startDt.hour
+    const startMinute = startDt.minute
+    const endHour = endDt.hour
+    const endMinute = endDt.minute
+    const results: Slot[] = []
+    for (let i = 0; i < 7; i++) {
+      const day = startDt.plus({days: i})
+      const dayStart = day.set({hour: startHour, minute: startMinute, second: 0, millisecond: 0})
+      const dayEnd = day.set({hour: endHour, minute: endMinute, second: 0, millisecond: 0})
+      const startIso = dayStart.toUTC().toISO()
+      const endIso = dayEnd.toUTC().toISO()
+      if (!startIso || !endIso) continue
+      try {
+        const slot = await this.createBlockedSlot({
+          companyId: params.companyId,
+          professionalId: params.professionalId,
+          startTime: startIso,
+          endTime: endIso
+        })
+        results.push(slot)
+      } catch (err) {
+        logger.warn({
+          message: "Failed to create blocked slot for day in week",
+          day: day.toFormat("yyyy-MM-dd"),
+          error: err instanceof Error ? err.message : String(err)
+        })
+      }
+    }
+    return results
+  }
+
+  /**
+   * Cria slots bloqueados para um dia da semana, nas próximas N semanas (ex.: toda segunda 12:00–13:00).
+   * dayOfWeek: 0=domingo, 1=segunda, ..., 6=sábado.
+   * startTime/endTime: "HH:mm" no fuso Brazil.
+   */
+  async createBlockedSlotsForDayOfWeek(params: {
+    companyId: string
+    professionalId: string
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+    weeks?: number
+  }): Promise<Slot[]> {
+    const timezone = "America/Sao_Paulo"
+    const weeks = params.weeks ?? 12
+    const [startH, startM] = params.startTime.split(":").map(Number)
+    const [endH, endM] = params.endTime.split(":").map(Number)
+    const results: Slot[] = []
+    const now = DateTime.now().setZone(timezone)
+    const targetWeekday = params.dayOfWeek === 0 ? 7 : params.dayOfWeek
+    let next = now.startOf("day").plus({days: (targetWeekday - now.weekday + 7) % 7})
+    if (next < now.startOf("day")) next = next.plus({weeks: 1})
+    for (let i = 0; i < weeks; i++) {
+      const dayStart = next.set({hour: startH, minute: startM, second: 0, millisecond: 0})
+      const dayEnd = next.set({hour: endH, minute: endM, second: 0, millisecond: 0})
+      if (dayEnd <= now) {
+        next = next.plus({weeks: 1})
+        continue
+      }
+      const startIso = dayStart.toUTC().toISO()
+      const endIso = dayEnd.toUTC().toISO()
+      if (!startIso || !endIso) {
+        next = next.plus({weeks: 1})
+        continue
+      }
+      try {
+        const slot = await this.createBlockedSlot({
+          companyId: params.companyId,
+          professionalId: params.professionalId,
+          startTime: startIso,
+          endTime: endIso
+        })
+        results.push(slot)
+      } catch (err) {
+        logger.warn({
+          message: "Failed to create blocked slot for day of week",
+          date: next.toFormat("yyyy-MM-dd"),
+          error: err instanceof Error ? err.message : String(err)
+        })
+      }
+      next = next.plus({weeks: 1})
+    }
+    return results
+  }
+
+  /**
+   * Lista slots de um profissional no intervalo (para o painel - disponíveis e bloqueados).
+   */
+  async getSlotsForPanel(params: {
+    companyId: string
+    professionalId: string
+    from: string
+    to: string
+  }): Promise<Slot[]> {
+    const supabase = await createServiceClient()
+
+    const {data: professional} = await supabase
+      .from("professionals")
+      .select("id")
+      .eq("id", params.professionalId)
+      .eq("company_id", params.companyId)
+      .single()
+
+    if (!professional) {
+      throw new Error("Professional not found or doesn't belong to company")
+    }
+
+    const {data, error} = await supabase
+      .from("slots")
+      .select("*")
+      .eq("professional_id", params.professionalId)
+      .gte("start_time", params.from)
+      .lte("start_time", params.to)
+      .order("start_time", {ascending: true})
+
+    if (error) {
+      logger.error({
+        message: "Failed to get slots for panel",
+        error,
+        professionalId: params.professionalId,
+        companyId: params.companyId
+      })
+      throw new Error("Failed to get slots")
+    }
+
+    return data || []
+  }
+
+  /**
+   * Remove um slot bloqueado (ou desbloqueia). Só remove se não houver booking no slot.
+   */
+  async deleteBlockedSlot(slotId: string, companyId: string): Promise<void> {
+    const supabase = await createServiceClient()
+
+    const {data: slot, error: slotError} = await supabase
+      .from("slots")
+      .select("id, professional_id, is_available")
+      .eq("id", slotId)
+      .single()
+
+    if (slotError || !slot) {
+      throw new Error("Slot not found")
+    }
+
+    const {data: professional} = await supabase
+      .from("professionals")
+      .select("id")
+      .eq("id", slot.professional_id)
+      .eq("company_id", companyId)
+      .single()
+
+    if (!professional) {
+      throw new Error("Slot not found or doesn't belong to your company")
+    }
+
+    const {data: booking} = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("slot_id", slotId)
+      .single()
+
+    if (booking) {
+      throw new Error("Cannot delete slot: it has an associated booking")
+    }
+
+    const {error: deleteError} = await supabase.from("slots").delete().eq("id", slotId)
+
+    if (deleteError) {
+      logger.error({
+        message: "Failed to delete blocked slot",
+        error: deleteError,
+        slotId,
+        companyId
+      })
+      throw new Error("Failed to delete slot")
     }
   }
 }

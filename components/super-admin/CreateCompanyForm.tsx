@@ -1,6 +1,7 @@
 "use client"
 
 import {useState} from "react"
+import {useApiFetch} from "@/components/providers/ApiAuthProvider"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import {Button} from "@/components/ui/button"
 import {FormField} from "@/components/forms/FormField"
@@ -13,6 +14,7 @@ interface CreateCompanyFormProps {
 }
 
 export function CreateCompanyForm({onCompanyCreated}: CreateCompanyFormProps) {
+  const fetchWithAuth = useApiFetch()
   const [name, setName] = useState("")
   const [slug, setSlug] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -24,7 +26,7 @@ export function CreateCompanyForm({onCompanyCreated}: CreateCompanyFormProps) {
     setLoading(true)
 
     try {
-      const response = await fetch("/api/v1/companies", {
+      const response = await fetchWithAuth("/api/v1/companies", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({name, slug})
