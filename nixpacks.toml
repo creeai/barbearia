@@ -6,7 +6,7 @@ nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
 cmds = [
-  "npm install -g pnpm@10.32.0",
+  "npm install -g pnpm@10.32.0 && export PATH=\"$(npm prefix -g)/bin:$PATH\"",
   "pnpm install --frozen-lockfile"
 ]
 
