@@ -1,14 +1,17 @@
 # Configuração do Nixpacks para EasyPanel
-# Força Node.js 20 e garante instalação de todas as dependências (incluindo devDependencies)
+# Evita Corepack no build para contornar erro de assinatura (keyid)
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
-cmds = ["npm ci --include=dev"]
+cmds = [
+  "npm install -g pnpm@10.32.0",
+  "pnpm install --frozen-lockfile"
+]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["pnpm build"]
 
 [start]
-cmd = "npm start"
+cmd = "pnpm start"

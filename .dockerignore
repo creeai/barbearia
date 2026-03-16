@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.cursor
+.specstory
+coverage
+dist
+*.log
+npm-debug.log*
+pnpm-debug.log*
